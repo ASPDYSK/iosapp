@@ -1,0 +1,52 @@
+workflows:
+  build-unsigned-ipa:
+    name: Build unsigned iOS IPA
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      xcode: 26.6
+    scripts:
+      - name: Show build environment
+        script: |
+          set -euo pipefail
+          xcodebuild -version
+          swift --version
+
+      - name: Extract Xcode project
+        script: |
+          set -euo pipefail
+          rm -rf "$CM_BUILD_DIR/source"
+          mkdir -p "$CM_BUILD_DIR/source"
+          unzip -q "$CM_BUILD_DIR/VocabularyCheck-iOS-助记版-v3-build7-r2.zip" -d "$CM_BUILD_DIR/source"
+          test -f "$CM_BUILD_DIR/source/VocabularyCheck.xcodeproj/project.pbxproj"
+
+      - name: Build unsigned app
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/source"
+          xcodebuild \
+            -project VocabularyCheck.xcodeproj \
+            -scheme VocabularyCheck \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$CM_BUILD_DIR/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            clean build
+
+      - name: Package unsigned IPA
+        script: |
+          set -euo pipefail
+          APP_PATH="$CM_BUILD_DIR/build/Build/Products/Release-iphoneos/VocabularyCheck.app"
+          test -d "$APP_PATH"
+          rm -rf "$CM_BUILD_DIR/Payload"
+          mkdir -p "$CM_BUILD_DIR/Payload"
+          ditto "$APP_PATH" "$CM_BUILD_DIR/Payload/VocabularyCheck.app"
+          cd "$CM_BUILD_DIR"
+          ditto -c -k --sequesterRsrc --keepParent Payload VocabularyCheck-unsigned.ipa
+
+    artifacts:
+      - VocabularyCheck-unsigned.ipa
+      - build/Build/Products/Release-iphoneos/VocabularyCheck.app
